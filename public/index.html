@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dishwasher Simulator</title>
+    <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        /* Arms rotate in the horizontal plane, so from the front they sweep wide then narrow */
+        @keyframes arm-turn { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(0.08); } }
+        .spray-arm { transform-box: view-box; animation: arm-turn 1.2s linear infinite; }
+        #armUpper { transform-origin: 160px 212px; animation-delay: -0.3s; }
+        #armLower { transform-origin: 160px 318px; }
+        .spray { stroke-dasharray: 4 8; animation: dash 0.5s linear infinite; }
+        .steam { animation: rise 2.4s linear infinite; }
+        .steam:nth-child(2) { animation-delay: 0.8s; }
+        .steam:nth-child(3) { animation-delay: 1.6s; }
+        .led { animation: blink 1s steps(1) infinite; }
+        .phase-group { display: none; }
+        .running.phase-pre-soak .ph-wash,
+        .running.phase-main-wash .ph-wash,
+        .running.phase-rinse .ph-wash,
+        .running.phase-final-rinse .ph-wash,
+        .running.phase-drying .ph-dry { display: inline; }
+        .running.phase-drying .spray-arm { animation-play-state: paused; }
+    </style>
+</head>
+<body>
+<nav class="navbar bg-white mb-3">
+    <div class="container">
+        <span class="navbar-brand fw-bold text-uppercase">Dishwasher Simulator</span>
+        <span id="stateBadge" class="state-badge">Idle</span>
+    </div>
+</nav>
+
+<main class="container pb-5">
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#main" type="button" role="tab">Main</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">Settings</button></li>
+    </ul>
+
+    <div class="tab-content">
+        <section class="tab-pane fade show active" id="main" role="tabpanel">
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="card drawing h-100">
+                        <div class="card-body" id="device">
+                            <svg viewBox="0 0 320 400" role="img" aria-label="Dishwasher">
+                                <!-- Cabinet and control panel -->
+                                <rect class="paper" x="20" y="16" width="280" height="368"/>
+                                <line class="line" x1="20" y1="66" x2="300" y2="66"/>
+                                <rect class="line thin" x="196" y="28" width="90" height="26"/>
+                                <text id="display" class="label" x="241" y="46" text-anchor="middle">--:--</text>
+                                <rect class="line thin" x="34" y="34" width="12" height="12"/>
+                                <rect class="line thin" x="56" y="34" width="12" height="12"/>
+                                <rect class="line thin" x="78" y="34" width="12" height="12"/>
+                                <rect class="solid only-running led anim" x="172" y="36" width="10" height="8"/>
+                                <!-- Door with handle -->
+                                <rect class="line" x="30" y="76" width="260" height="298"/>
+                                <rect class="line" x="110" y="86" width="100" height="10"/>
+                                <!-- Cut-away interior -->
+                                <rect class="line thin" x="48" y="110" width="224" height="250"/>
+                                <!-- Upper rack with cups -->
+                                <polyline class="line thin" points="58,192 58,198 262,198 262,192"/>
+                                <polyline class="line thin" points="76,192 72,160 98,160 94,192"/>
+                                <polyline class="line thin" points="112,192 108,166 132,166 128,192"/>
+                                <polyline class="line thin" points="150,192 146,156 174,156 170,192"/>
+                                <polyline class="line thin" points="188,192 184,166 208,166 204,192"/>
+                                <polyline class="line thin" points="224,192 220,160 246,160 242,192"/>
+                                <!-- Lower rack with plates -->
+                                <polyline class="line thin" points="58,296 58,302 262,302 262,296"/>
+                                <rect class="line thin" x="70" y="236" width="6" height="60"/>
+                                <rect class="line thin" x="92" y="232" width="6" height="64"/>
+                                <rect class="line thin" x="114" y="236" width="6" height="60"/>
+                                <rect class="line thin" x="136" y="232" width="6" height="64"/>
+                                <rect class="line thin" x="178" y="236" width="6" height="60"/>
+                                <rect class="line thin" x="200" y="232" width="6" height="64"/>
+                                <rect class="line thin" x="222" y="236" width="6" height="60"/>
+                                <rect class="line thin" x="244" y="232" width="6" height="64"/>
+                                <!-- Spray arms -->
+                                <g id="armUpper" class="spray-arm anim">
+                                    <line class="line" x1="96" y1="212" x2="224" y2="212"/>
+                                    <line class="line thin" x1="104" y1="208" x2="104" y2="216"/>
+                                    <line class="line thin" x1="216" y1="208" x2="216" y2="216"/>
+                                </g>
+                                <rect class="paper" x="156" y="208" width="8" height="8"/>
+                                <g id="armLower" class="spray-arm anim">
+                                    <line class="line" x1="80" y1="318" x2="240" y2="318"/>
+                                    <line class="line thin" x1="88" y1="314" x2="88" y2="322"/>
+                                    <line class="line thin" x1="232" y1="314" x2="232" y2="322"/>
+                                </g>
+                                <rect class="paper" x="156" y="314" width="8" height="8"/>
+                                <line class="line thin" x1="160" y1="322" x2="160" y2="352"/>
+                                <polyline class="line thin" points="140,352 180,352"/>
+                                <!-- Water spray while washing -->
+                                <g class="phase-group ph-wash">
+                                    <polyline class="line thin spray anim" points="104,208 90,170"/>
+                                    <polyline class="line thin spray anim" points="216,208 230,170"/>
+                                    <polyline class="line thin spray anim" points="160,208 160,166"/>
+                                    <polyline class="line thin spray anim" points="88,314 74,240"/>
+                                    <polyline class="line thin spray anim" points="232,314 246,240"/>
+                                    <polyline class="line thin spray anim" points="130,314 124,244"/>
+                                    <polyline class="line thin spray anim" points="190,314 196,244"/>
+                                </g>
+                                <!-- Steam while drying -->
+                                <g class="phase-group ph-dry">
+                                    <polyline class="line thin steam anim" points="100,150 106,140 100,130 106,120"/>
+                                    <polyline class="line thin steam anim" points="160,150 166,140 160,130 166,120"/>
+                                    <polyline class="line thin steam anim" points="220,150 226,140 220,130 226,120"/>
+                                </g>
+                                <!-- Plinth -->
+                                <line class="line" x1="20" y1="384" x2="300" y2="384"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">Program</div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-sm-7">
+                                    <label class="form-label" for="program">Program</label>
+                                    <select id="program" class="form-select"></select>
+                                </div>
+                                <div class="col-sm-5">
+                                    <label class="form-label" for="finishBy">Finish by</label>
+                                    <input id="finishBy" type="datetime-local" class="form-control">
+                                    <div class="form-text">Latest end offered to the energy manager. Defaults to 12 h.</div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="optIn">
+                                        <label class="form-check-label" for="optIn">Allow energy manager to move the start time</label>
+                                    </div>
+                                </div>
+                                <div class="col-12 d-flex flex-wrap gap-2">
+                                    <button id="start" class="btn btn-dark">Start</button>
+                                    <button id="pause" class="btn btn-outline-dark">Pause</button>
+                                    <button id="resume" class="btn btn-outline-dark">Resume</button>
+                                    <button id="stop" class="btn btn-outline-dark">Stop</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">Status</div>
+                        <div class="card-body">
+                            <div class="row g-3 readout">
+                                <div class="col-6 col-md-4"><div class="meta-label">State</div><div id="runState" class="meta-value">–</div></div>
+                                <div class="col-6 col-md-4"><div class="meta-label">Phase</div><div id="phase" class="meta-value">–</div></div>
+                                <div class="col-6 col-md-4"><div class="meta-label">Remaining</div><div id="countdown" class="meta-value">–</div></div>
+                                <div class="col-6 col-md-4"><div class="meta-label">Starts</div><div id="startsAt" class="meta-value">–</div></div>
+                                <div class="col-6 col-md-4"><div class="meta-label">Power</div><div id="power" class="meta-value">–</div></div>
+                                <div class="col-6 col-md-4"><div class="meta-label">Energy total</div><div id="energy" class="meta-value">–</div></div>
+                                <div class="col-6 col-md-4"><div class="meta-label">Opt-out state</div><div id="optOutState" class="meta-value">–</div></div>
+                                <div class="col-12 col-md-8"><div class="meta-label">Last event</div><div id="message" class="meta-value">–</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">DEM forecast</div>
+                        <div class="card-body">
+                            <div id="forecastChart"></div>
+                            <div id="forecastMeta" class="row g-3 mt-1 readout"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="tab-pane fade" id="settings" role="tabpanel"></section>
+    </div>
+</main>
+<div id="toasts"></div>
+
+<script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
